@@ -14,7 +14,13 @@ from sqlalchemy.orm import Session
 from src.database import get_db
 from src.models import User
 
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-me")
+try:
+    SECRET_KEY = os.environ["JWT_SECRET_KEY"]
+except KeyError:
+    raise RuntimeError(
+        "JWT_SECRET_KEY environment variable is not set. "
+        "Set a secure value before starting the application."
+    )
 ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE = timedelta(minutes=15)
 REFRESH_TOKEN_EXPIRE = timedelta(days=7)
