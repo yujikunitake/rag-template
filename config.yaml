@@ -1,0 +1,22 @@
+chunker:
+  strategy: fixed_size
+  chunk_size: 512
+  overlap: 64
+
+embedder:
+  model: nomic-embed-text-v1.5
+  device: mps
+
+retriever:
+  strategy: vector
+  top_k: 5
+  mmr_lambda: 0.5
+
+reranker:
+  enabled: false
+  model: unicamp-dl/InRanker-small
+
+generator:
+  provider: openrouter
+  default_model: deepseek/deepseek-chat-v3
+  fallback_model: google/gemini-flash-1.5
