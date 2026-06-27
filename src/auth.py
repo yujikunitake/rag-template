@@ -1,0 +1,149 @@
+# --- Config ---
+import os
+import uuid
+from datetime import UTC, datetime, timedelta
+
+import bcrypt as _bcrypt
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request
+from jose import JWTError, jwt
+from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
+
+from src.database import get_db
+from src.models import User
+
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-secret-change-me")
+ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE = timedelta(minutes=15)
+REFRESH_TOKEN_EXPIRE = timedelta(days=7)
+
+# --- Utilitários ---
+
+limiter = Limiter(key_func=get_remote_address)
+
+# hash dummy para evitar timing attack quando usuário não existe
+_DUMMY_HASH = _bcrypt.hashpw(b"__dummy__", _bcrypt.gensalt()).decode()
+
+
+def hash_password(password: str) -> str:
+    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return _bcrypt.checkpw(plain.encode(), hashed.encode())
+
+
+def create_access_token(user_id: str, expires_delta: timedelta | None = None) -> str:
+    expire = datetime.now(UTC) + (expires_delta or ACCESS_TOKEN_EXPIRE)
+    return jwt.encode({"sub": user_id, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_refresh_token(user_id: str, expires_delta: timedelta | None = None) -> str:
+    expire = datetime.now(UTC) + (expires_delta or REFRESH_TOKEN_EXPIRE)
+    return jwt.encode({"sub": user_id, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def _decode_token(token: str) -> str:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="token inválido")
+        return user_id
+    except JWTError:
+        raise HTTPException(status_code=401, detail="token inválido")
+
+
+def _set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
+    response.set_cookie("access_token", access_token, httponly=True, samesite="lax")
+    response.set_cookie("refresh_token", refresh_token, httponly=True, samesite="lax")
+
+
+def _clear_auth_cookies(response) -> None:
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
+
+
+# --- Dependency ---
+
+
+def get_current_user(
+    access_token: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    if not access_token:
+        raise HTTPException(status_code=401, detail="não autenticado")
+    user_id = _decode_token(access_token)
+    user = db.get(User, uuid.UUID(user_id))
+    if not user:
+        raise HTTPException(status_code=401, detail="usuário não encontrado")
+    return user
+
+
+# --- Router ---
+
+auth_router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@auth_router.post("/login")
+@limiter.limit("5/minute")
+def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+
+    user = db.query(User).filter(User.email == body.email).first()
+
+    if not user:
+        verify_password(body.password, _DUMMY_HASH)
+        raise HTTPException(status_code=401, detail="credenciais inválidas")
+
+    if not verify_password(body.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="credenciais inválidas")
+
+    access_token = create_access_token(str(user.id))
+    refresh_token = create_refresh_token(str(user.id))
+
+    response = JSONResponse({"email": user.email, "user_id": str(user.id)})
+    _set_auth_cookies(response, access_token, refresh_token)
+    return response
+
+
+@auth_router.post("/refresh")
+def refresh(
+    refresh_token: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+):
+    from fastapi.responses import JSONResponse
+
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="não autenticado")
+
+    user_id = _decode_token(refresh_token)
+    user = db.get(User, uuid.UUID(user_id))
+    if not user:
+        raise HTTPException(status_code=401, detail="usuário não encontrado")
+
+    access_token = create_access_token(str(user.id))
+    response = JSONResponse({"ok": True})
+    response.set_cookie("access_token", access_token, httponly=True, samesite="lax")
+    return response
+
+
+@auth_router.post("/logout")
+def logout():
+    from fastapi.responses import JSONResponse
+
+    response = JSONResponse({"ok": True})
+    _clear_auth_cookies(response)
+    return response
+
+
+@auth_router.get("/me")
+def me(current_user: User = Depends(get_current_user)):
+    return {"email": current_user.email, "user_id": current_user.id}
