@@ -1,6 +1,10 @@
+import os
+
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
+
+os.environ.setdefault("DATABASE_URL", "postgresql://rag:rag@localhost:5432/rag_test")
 
 from src.models import Base
 
