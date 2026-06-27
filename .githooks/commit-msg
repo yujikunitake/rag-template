@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Validates commit message against Conventional Commits with required scope.
+# Format: type(scope): description
+
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+PATTERN="^(feat|fix|refactor|test|chore|docs)\([a-z][a-z0-9_-]+\): .+"
+
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+    echo ""
+    echo "❌ Invalid commit message."
+    echo ""
+    echo "  Expected: type(scope): description"
+    echo "  Example:  feat(auth): add JWT middleware with httpOnly cookie"
+    echo ""
+    echo "  Types: feat | fix | refactor | test | chore | docs"
+    echo "  Scope: required (e.g. auth, chunkers, retrieval, pipeline, api, config, db)"
+    echo ""
+    echo "  Got: $COMMIT_MSG"
+    echo ""
+    exit 1
+fi
