@@ -24,7 +24,8 @@ uv sync --extra dev
 cp .env.example .env
 # Edit .env with your keys
 
-# 4. Run migrations
+# 4. Export environment and run migrations
+set -a && source .env && set +a
 uv run alembic upgrade head
 
 # 5. Start the API
