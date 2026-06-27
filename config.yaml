@@ -14,7 +14,7 @@ retriever:
 
 reranker:
   enabled: false
-  model: unicamp-dl/InRanker-small
+  model: jina-reranker-v2-base-multilingual
 
 generator:
   provider: openrouter

@@ -23,7 +23,6 @@ repos:
         additional_dependencies:
           - pydantic>=2.7.0
           - types-pyyaml>=6.0.0
-          - types-passlib>=1.7.0
           - types-python-jose>=3.3.0
         args: [--ignore-missing-imports]
 
