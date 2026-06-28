@@ -24,6 +24,7 @@ except KeyError:
 ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE = timedelta(minutes=15)
 REFRESH_TOKEN_EXPIRE = timedelta(days=7)
+SECURE_COOKIES = os.environ.get("ENV") != "development"
 
 # --- Utilitários ---
 
@@ -63,8 +64,22 @@ def _decode_token(token: str) -> str:
 
 
 def _set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
-    response.set_cookie("access_token", access_token, httponly=True, samesite="lax")
-    response.set_cookie("refresh_token", refresh_token, httponly=True, samesite="lax")
+    response.set_cookie(
+        "access_token",
+        access_token,
+        httponly=True,
+        samesite="lax",
+        secure=SECURE_COOKIES,
+        max_age=int(ACCESS_TOKEN_EXPIRE.total_seconds()),
+    )
+    response.set_cookie(
+        "refresh_token",
+        refresh_token,
+        httponly=True,
+        samesite="lax",
+        secure=SECURE_COOKIES,
+        max_age=int(REFRESH_TOKEN_EXPIRE.total_seconds()),
+    )
 
 
 def _clear_auth_cookies(response) -> None:

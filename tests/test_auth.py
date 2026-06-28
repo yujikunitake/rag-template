@@ -113,6 +113,40 @@ def test_auth_logout_clears_cookies(client, test_user):
     assert response.cookies.get("refresh_token", "") == ""
 
 
+# --- Cookies: secure e max_age ---
+
+
+def test_auth_login_cookies_have_max_age(client, test_user):
+    response = client.post(
+        "/auth/login", json={"email": "test@example.com", "password": "correct_password"}
+    )
+    set_cookies = response.headers.get_list("set-cookie")
+    access_cookie = next(c for c in set_cookies if "access_token=" in c)
+    refresh_cookie = next(c for c in set_cookies if "refresh_token=" in c)
+    assert "max-age=900" in access_cookie.lower()
+    assert "max-age=604800" in refresh_cookie.lower()
+
+
+def test_auth_cookies_are_secure_outside_development(client, test_user):
+    with patch("src.auth.SECURE_COOKIES", True):
+        response = client.post(
+            "/auth/login", json={"email": "test@example.com", "password": "correct_password"}
+        )
+    set_cookies = response.headers.get_list("set-cookie")
+    access_cookie = next(c for c in set_cookies if "access_token=" in c)
+    assert "secure" in access_cookie.lower()
+
+
+def test_auth_cookies_not_secure_in_development(client, test_user):
+    with patch("src.auth.SECURE_COOKIES", False):
+        response = client.post(
+            "/auth/login", json={"email": "test@example.com", "password": "correct_password"}
+        )
+    set_cookies = response.headers.get_list("set-cookie")
+    access_cookie = next(c for c in set_cookies if "access_token=" in c)
+    assert "secure" not in access_cookie.lower()
+
+
 # --- Rota protegida ---
 
 
