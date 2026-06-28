@@ -55,13 +55,13 @@ def test_auth_login_valid_returns_cookies(client, test_user):
 def test_auth_login_wrong_password_returns_401(client, test_user):
     response = client.post("/auth/login", json={"email": "test@example.com", "password": "wrong"})
     assert response.status_code == 401
-    assert response.json()["detail"] == "credenciais inválidas"
+    assert response.json()["detail"] == "invalid credentials"
 
 
 def test_auth_login_unknown_email_returns_401(client):
     response = client.post("/auth/login", json={"email": "nobody@example.com", "password": "any"})
     assert response.status_code == 401
-    assert response.json()["detail"] == "credenciais inválidas"
+    assert response.json()["detail"] == "invalid credentials"
 
 
 def test_auth_login_rate_limit(client):
@@ -72,8 +72,7 @@ def test_auth_login_rate_limit(client):
 
 
 def test_auth_login_unknown_email_always_runs_verify_password(client):
-    # verify_password deve ser chamado mesmo quando o usuário não existe
-    # para evitar timing attack: ambos os casos levam ~100ms (bcrypt)
+    # verify_password must run even when user does not exist to prevent timing attacks
     with patch("src.auth.verify_password") as mock_verify:
         mock_verify.return_value = False
         client.post("/auth/login", json={"email": "nobody@example.com", "password": "any"})
@@ -113,7 +112,7 @@ def test_auth_logout_clears_cookies(client, test_user):
     assert response.cookies.get("refresh_token", "") == ""
 
 
-# --- Cookies: secure e max_age ---
+# --- Cookies: secure and max_age ---
 
 
 def test_auth_login_cookies_have_max_age(client, test_user):
@@ -147,7 +146,7 @@ def test_auth_cookies_not_secure_in_development(client, test_user):
     assert "secure" not in access_cookie.lower()
 
 
-# --- Rota protegida ---
+# --- Protected route ---
 
 
 def test_protected_route_without_token_returns_401(client):
@@ -165,5 +164,22 @@ def test_protected_route_with_valid_token_returns_200(client, test_user):
 def test_protected_route_with_expired_token_returns_401(client, test_user):
     expired = create_access_token(str(test_user.id), expires_delta=timedelta(seconds=-1))
     client.cookies.set("access_token", expired)
+    response = client.get("/auth/me")
+    assert response.status_code == 401
+
+
+# --- Access vs refresh token distinction ---
+
+
+def test_auth_refresh_rejects_access_token(client, test_user):
+    access = create_access_token(str(test_user.id))
+    client.cookies.set("refresh_token", access)
+    response = client.post("/auth/refresh")
+    assert response.status_code == 401
+
+
+def test_protected_route_rejects_refresh_token(client, test_user):
+    refresh = create_refresh_token(str(test_user.id))
+    client.cookies.set("access_token", refresh)
     response = client.get("/auth/me")
     assert response.status_code == 401

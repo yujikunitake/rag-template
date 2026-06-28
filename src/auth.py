@@ -26,11 +26,11 @@ ACCESS_TOKEN_EXPIRE = timedelta(minutes=15)
 REFRESH_TOKEN_EXPIRE = timedelta(days=7)
 SECURE_COOKIES = os.environ.get("ENV") != "development"
 
-# --- Utilitários ---
+# --- Utilities ---
 
 limiter = Limiter(key_func=get_remote_address)
 
-# hash dummy para evitar timing attack quando usuário não existe
+# pre-computed hash to prevent timing attack when user does not exist
 _DUMMY_HASH = _bcrypt.hashpw(b"__dummy__", _bcrypt.gensalt()).decode()
 
 
@@ -42,25 +42,27 @@ def verify_password(plain: str, hashed: str) -> bool:
     return _bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
+def _create_token(user_id: str, typ: str, expires_delta: timedelta) -> str:
+    expire = datetime.now(UTC) + expires_delta
+    return jwt.encode({"sub": user_id, "exp": expire, "typ": typ}, SECRET_KEY, algorithm=ALGORITHM)
+
+
 def create_access_token(user_id: str, expires_delta: timedelta | None = None) -> str:
-    expire = datetime.now(UTC) + (expires_delta or ACCESS_TOKEN_EXPIRE)
-    return jwt.encode({"sub": user_id, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
+    return _create_token(user_id, "access", expires_delta or ACCESS_TOKEN_EXPIRE)
 
 
 def create_refresh_token(user_id: str, expires_delta: timedelta | None = None) -> str:
-    expire = datetime.now(UTC) + (expires_delta or REFRESH_TOKEN_EXPIRE)
-    return jwt.encode({"sub": user_id, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
+    return _create_token(user_id, "refresh", expires_delta or REFRESH_TOKEN_EXPIRE)
 
 
-def _decode_token(token: str) -> str:
+def _decode_token(token: str, expected_typ: str) -> str:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="token inválido")
-        return user_id
+        if payload.get("sub") is None or payload.get("typ") != expected_typ:
+            raise HTTPException(status_code=401, detail="invalid token")
+        return payload["sub"]
     except JWTError:
-        raise HTTPException(status_code=401, detail="token inválido")
+        raise HTTPException(status_code=401, detail="invalid token")
 
 
 def _set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
@@ -95,11 +97,11 @@ def get_current_user(
     db: Session = Depends(get_db),
 ) -> User:
     if not access_token:
-        raise HTTPException(status_code=401, detail="não autenticado")
-    user_id = _decode_token(access_token)
+        raise HTTPException(status_code=401, detail="not authenticated")
+    user_id = _decode_token(access_token, "access")
     user = db.get(User, uuid.UUID(user_id))
     if not user:
-        raise HTTPException(status_code=401, detail="usuário não encontrado")
+        raise HTTPException(status_code=401, detail="user not found")
     return user
 
 
@@ -122,10 +124,10 @@ def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
 
     if not user:
         verify_password(body.password, _DUMMY_HASH)
-        raise HTTPException(status_code=401, detail="credenciais inválidas")
+        raise HTTPException(status_code=401, detail="invalid credentials")
 
     if not verify_password(body.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="credenciais inválidas")
+        raise HTTPException(status_code=401, detail="invalid credentials")
 
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
@@ -143,12 +145,12 @@ def refresh(
     from fastapi.responses import JSONResponse
 
     if not refresh_token:
-        raise HTTPException(status_code=401, detail="não autenticado")
+        raise HTTPException(status_code=401, detail="not authenticated")
 
-    user_id = _decode_token(refresh_token)
+    user_id = _decode_token(refresh_token, "refresh")
     user = db.get(User, uuid.UUID(user_id))
     if not user:
-        raise HTTPException(status_code=401, detail="usuário não encontrado")
+        raise HTTPException(status_code=401, detail="user not found")
 
     access_token = create_access_token(str(user.id))
     response = JSONResponse({"ok": True})

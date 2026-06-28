@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 os.environ.setdefault("DATABASE_URL", "postgresql://rag:rag@localhost:5432/rag_test")
 os.environ.setdefault("ENV", "development")
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key")
 
 from src.models import Base
 
