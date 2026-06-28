@@ -1,24 +1,24 @@
 import os
 from collections.abc import Generator
+from functools import cache
 
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-try:
-    DATABASE_URL = os.environ["DATABASE_URL"]
-except KeyError:
-    raise RuntimeError(
-        "DATABASE_URL environment variable is not set. "
-        "Example: postgresql://user:password@localhost:5432/dbname"
-    )
 
-engine = create_engine(DATABASE_URL)
-
-SessionLocal = sessionmaker(bind=engine)
+@cache
+def _get_engine() -> Engine:
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError(
+            "DATABASE_URL environment variable is not set. "
+            "Example: postgresql://user:password@localhost:5432/dbname"
+        )
+    return create_engine(url)
 
 
 def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
+    db = sessionmaker(bind=_get_engine())()
     try:
         yield db
     finally:
