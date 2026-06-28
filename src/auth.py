@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import bcrypt as _bcrypt
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from slowapi import Limiter
@@ -122,8 +123,6 @@ class LoginRequest(BaseModel):
 @auth_router.post("/login")
 @limiter.limit("5/minute")
 def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
-    from fastapi.responses import JSONResponse
-
     user = db.query(User).filter(User.email == body.email).first()
 
     if not user:
@@ -146,8 +145,6 @@ def refresh(
     refresh_token: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
 ):
-    from fastapi.responses import JSONResponse
-
     if not refresh_token:
         raise HTTPException(status_code=401, detail="not authenticated")
 
@@ -165,8 +162,6 @@ def refresh(
 
 @auth_router.post("/logout")
 def logout():
-    from fastapi.responses import JSONResponse
-
     response = JSONResponse({"ok": True})
     _clear_auth_cookies(response)
     return response
