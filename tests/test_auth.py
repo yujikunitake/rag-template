@@ -36,7 +36,7 @@ def client(session):
 def reset_rate_limit():
     from src.auth import limiter
 
-    limiter._limiter.storage.reset()
+    limiter.reset()
     yield
 
 
