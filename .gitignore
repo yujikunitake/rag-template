@@ -46,6 +46,8 @@ Thumbs.db
 # Local workflow files (not part of the public template)
 CLAUDE.md
 SESSION_BACKLOG.md
+SECURITY_REVIEW.md
+docs/security-decisions.md
 
 # Frontend
 frontend/node_modules/
