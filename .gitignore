@@ -47,7 +47,7 @@ Thumbs.db
 CLAUDE.md
 SESSION_BACKLOG.md
 SECURITY_REVIEW.md
-docs/security-decisions.md
+SECURITY_DECISIONS.md
 
 # Frontend
 frontend/node_modules/
