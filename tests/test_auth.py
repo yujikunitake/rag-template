@@ -87,6 +87,32 @@ def test_auth_refresh_valid_returns_new_access_token(client, test_user):
     response = client.post("/auth/refresh")
     assert response.status_code == 200
     assert "access_token" in response.cookies
+    assert "refresh_token" in response.cookies
+
+
+def test_auth_refresh_returns_new_refresh_token(client, test_user):
+    client.post("/auth/login", json={"email": "test@example.com", "password": "correct_password"})
+    response = client.post("/auth/refresh")
+    assert response.status_code == 200
+    assert "refresh_token" in response.cookies
+
+
+def test_auth_refresh_rotates_refresh_token(client, test_user):
+    client.post("/auth/login", json={"email": "test@example.com", "password": "correct_password"})
+    original_refresh = client.cookies["refresh_token"]
+    client.post("/auth/refresh")
+    new_refresh = client.cookies["refresh_token"]
+    assert new_refresh != original_refresh
+
+
+def test_auth_refresh_cookies_have_max_age(client, test_user):
+    client.post("/auth/login", json={"email": "test@example.com", "password": "correct_password"})
+    response = client.post("/auth/refresh")
+    set_cookies = response.headers.get_list("set-cookie")
+    access_cookie = next(c for c in set_cookies if "access_token=" in c)
+    refresh_cookie = next(c for c in set_cookies if "refresh_token=" in c)
+    assert "max-age=900" in access_cookie.lower()
+    assert "max-age=604800" in refresh_cookie.lower()
 
 
 def test_auth_refresh_without_cookie_returns_401(client):

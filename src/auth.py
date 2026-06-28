@@ -44,7 +44,11 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def _create_token(user_id: str, typ: str, expires_delta: timedelta) -> str:
     expire = datetime.now(UTC) + expires_delta
-    return jwt.encode({"sub": user_id, "exp": expire, "typ": typ}, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(
+        {"sub": user_id, "exp": expire, "typ": typ, "jti": str(uuid.uuid4())},
+        SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
 
 
 def create_access_token(user_id: str, expires_delta: timedelta | None = None) -> str:
@@ -153,8 +157,9 @@ def refresh(
         raise HTTPException(status_code=401, detail="user not found")
 
     access_token = create_access_token(str(user.id))
+    refresh_token = create_refresh_token(str(user.id))
     response = JSONResponse({"ok": True})
-    response.set_cookie("access_token", access_token, httponly=True, samesite="lax")
+    _set_auth_cookies(response, access_token, refresh_token)
     return response
 
 
