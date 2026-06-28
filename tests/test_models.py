@@ -1,3 +1,6 @@
+import pytest
+from sqlalchemy.exc import IntegrityError
+
 from src.models import Chunk, ChunkEmbedding, Collection, Document, PipelineVersion
 
 
@@ -34,3 +37,21 @@ def test_chunk_embedding_relationship(session):
     session.flush()
 
     assert chunk.embedding.model_name == "nomic"
+
+
+def test_pipeline_version_status_rejects_invalid_value(session):
+    collection = Collection(name="status-invalid")
+    version = PipelineVersion(collection=collection, config={}, status="banana")
+    session.add_all([collection, version])
+    with pytest.raises(IntegrityError):
+        session.flush()
+
+
+def test_pipeline_version_status_accepts_valid_values(session):
+    collection = Collection(name="status-valid")
+    session.add(collection)
+    session.flush()
+    for status in ("active", "staging", "archived", "deleted"):
+        version = PipelineVersion(collection=collection, config={}, status=status)
+        session.add(version)
+    session.flush()
